@@ -4,6 +4,7 @@ import pygame
 from .config import (LARGURA, ALTURA, FPS, TITULO, FUNDO, BRANCO, VERDE,
                      AMARELO, VERMELHO, CIANO, CINZA)
 from .entities import Alien, Barreira, Nave, Tiro
+from pathlib import Path
 
 ALIEN_COLUNAS = 10
 ALIEN_FILEIRAS = 6
@@ -23,6 +24,15 @@ class Jogo:
     def __init__(self, tela, pasta_raiz):
         self.tela = tela
         self.raiz = pasta_raiz
+        self.som_tiro_nave = pygame.mixer.Sound(
+    str(self.raiz / "assets" / "audio" / "tiro-nave.wav")
+)
+        self.som_tiro_alien = pygame.mixer.Sound(
+    str(self.raiz / "assets" / "audio" / "tiro-aliens.wav")
+)
+
+        self.som_tiro_nave.set_volume(0.45)
+        self.som_tiro_alien.set_volume(0.35)
         self.fonte = pygame.font.SysFont("consolas", 18, bold=True)
         self.fonte_grande = pygame.font.SysFont("consolas", 36, bold=True)
         self.fonte_pequena = pygame.font.SysFont("consolas", 14, bold=True)
@@ -89,7 +99,7 @@ class Jogo:
         teclas = pygame.key.get_pressed()
         self.nave.atualizar(dt, teclas)
         if teclas[pygame.K_SPACE]:
-            self.nave.tentar_atirar(agora, self.tiros)
+            self.nave.tentar_atirar(agora, self.tiros, self.som_tiro_nave)
         self.atualizar_aliens(dt)
 
         if agora - self.ultimo_tiro_inimigo >= self.intervalo_tiro_inimigo and self.aliens:
@@ -100,6 +110,7 @@ class Jogo:
                     atiradores.append(alien)
             atirador = random.choice(atiradores or self.aliens)
             self.tiros.append(Tiro(atirador.x + atirador.largura / 2, atirador.y + atirador.altura, 210, False))
+            self.som_tiro_alien.play()
             self.ultimo_tiro_inimigo = agora
             self.intervalo_tiro_inimigo = random.uniform(0.65, 1.35)
 
@@ -167,25 +178,63 @@ class Jogo:
         pygame.display.flip()
 
 
+
 def executar():
     pygame.init()
+    pygame.mixer.init()
+
     pygame.display.set_caption(TITULO)
     tela = pygame.display.set_mode((LARGURA, ALTURA))
     relogio = pygame.time.Clock()
-    raiz = __import__("pathlib").Path(__file__).resolve().parents[2]
+
+    raiz = Path(__file__).resolve().parents[2]
+
+    # Música de fundo
+    musica = raiz / "assets" / "audio" / "Soundtrack.mp3"
+    pygame.mixer.music.load(str(musica))
+    pygame.mixer.music.set_volume(0.35)
+    pygame.mixer.music.play(-1)
+
+    # Sons dos disparos
+    som_tiro_nave = pygame.mixer.Sound(
+        str(raiz / "assets" / "audio" / "tiro-nave.wav")
+    )
+
+    som_tiro_alien = pygame.mixer.Sound(
+        str(raiz / "assets" / "audio" / "tiro-aliens.wav")
+    )
+
+    som_tiro_nave.set_volume(0.45)
+    som_tiro_alien.set_volume(0.35)
+
+    # Cria o jogo
     jogo = Jogo(tela, raiz)
+
+    # Disponibiliza os sons para a classe Jogo
+    jogo.som_tiro_nave = som_tiro_nave
+    jogo.som_tiro_alien = som_tiro_alien
+
     executando = True
+
     while executando:
         dt = min(relogio.tick(FPS) / 1000, 0.04)
         agora = pygame.time.get_ticks() / 1000
+
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 executando = False
+
             elif evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_ESCAPE:
                     executando = False
-                elif evento.key == pygame.K_RETURN and jogo.estado in ("game_over", "vitoria"):
+
+                elif evento.key == pygame.K_RETURN and jogo.estado in (
+                    "game_over", "vitoria"
+                ):
                     jogo.novo_jogo()
+
         jogo.atualizar(dt, agora)
         jogo.desenhar()
+
     pygame.quit()
+

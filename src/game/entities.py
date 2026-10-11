@@ -70,13 +70,18 @@ class Nave:
             self.x += self.velocidade * dt
         self.x = max(8, min(LARGURA - self.largura - 8, self.x))
 
-    def tentar_atirar(self, agora, tiros):
+    
+    def tentar_atirar(self, agora, tiros, som_tiro=None):
         if agora - self.ultimo_tiro >= self.intervalo_tiro:
-            tiros.append(Tiro(self.x + self.largura / 2 - 2, self.y - 5, -440, True))
+            tiros.append(
+                Tiro(self.x + self.largura / 2 - 2, self.y - 5, -440, True)
+            )
             self.ultimo_tiro = agora
 
+            if som_tiro:
+                som_tiro.play()
     def desenhar(self, tela):
-        tela.blit(self.imagem, self.rect)
+            tela.blit(self.imagem, self.rect)         
 
 
 class Barreira:
