@@ -49,29 +49,96 @@ class Jogo:
         }
         self.nave_imagem = carregar_imagem(pasta / "Space-Invaders-Ship-PNG-Images.png", (48, 48))
 
+   
     def novo_jogo(self):
+        self.fase = 1
+        self.vidas = 1
+        self.pontuacao = 0
+        self.vida_extra_ganha = False
+        self.iniciar_fase()
+
+
+    
+    def iniciar_fase(self):
         self.nave = Nave(self.nave_imagem)
         self.aliens = []
-        # Duas fileiras de cada cor: verde (10), amarelo (20), vermelho (30).
-        ordem = ["verde", "verde", "amarelo", "amarelo", "vermelho", "vermelho"]
+
+        # Fase 1: formação original
+        ordem = [
+            "verde", "verde",
+            "amarelo", "amarelo",
+            "vermelho", "vermelho"
+        ]
+ 
         inicio_x, inicio_y, passo_x, passo_y = 105, 82, 58, 42
+
+        # Define o tamanho dos aliens por fase.
+        if self.fase == 1:
+            largura_alien = 30
+            altura_alien = 24
+        else:
+            largura_alien = 30
+            altura_alien = 24
+
         for linha, tipo in enumerate(ordem):
             for coluna in range(ALIEN_COLUNAS):
-                self.aliens.append(Alien(inicio_x + coluna * passo_x, inicio_y + linha * passo_y,
-                                         tipo, self.sprites[tipo], ALIEN_LARGURA, ALIEN_ALTURA))
+                imagem_alien = pygame.transform.scale(
+                    self.sprites[tipo],
+                    (largura_alien, altura_alien)
+                )
+
+                self.aliens.append(
+                    Alien(
+                        inicio_x + coluna * passo_x,
+                        inicio_y + linha * passo_y,
+                        tipo,
+                        imagem_alien,
+                        largura_alien,
+                        altura_alien
+                    )
+                )
+
         self.direcao = 1
-        self.velocidade_alien = 34
+
+        if self.fase == 1:
+            self.velocidade_alien = 34
+        elif self.fase == 2:
+            self.velocidade_alien = 45
+        else:
+            self.velocidade_alien = 58
+
         self.velocidade_descida = 18
         self.tiros = []
         self.barreiras = [Barreira(x, 430) for x in (100, 285, 470, 655)]
-        self.pontuacao = 0
+
         self.estado = "jogando"
         self.ultimo_tiro_inimigo = 0
-        self.intervalo_tiro_inimigo = random.uniform(0.65, 1.3)
+
+        if self.fase == 3:
+            self.intervalo_tiro_inimigo = random.uniform(0.30, 0.65)
+        else:
+            self.intervalo_tiro_inimigo = random.uniform(0.65, 1.3)
+
+        self.estado = "jogando"
+        self.ultimo_tiro_inimigo = 0
+
+        if self.fase == 3:
+            self.intervalo_tiro_inimigo = random.uniform(0.30, 0.65)
+        else:
+            self.intervalo_tiro_inimigo = random.uniform(0.65, 1.3)
+
+    
+    def avancar_fase(self):
+        if self.fase < 3:
+            self.fase += 1
+            self.iniciar_fase()
+        else:
+            self.estado = "vitoria"
+        
 
     def atualizar_aliens(self, dt):
         if not self.aliens:
-            self.estado = "vitoria"
+            self.avancar_fase()
             return
         esquerda = min(a.x for a in self.aliens)
         direita = max(a.x + a.largura for a in self.aliens)
@@ -90,12 +157,16 @@ class Jogo:
             for barreira in self.barreiras:
                 barreira.receber_invasor(alien.rect)
             if alien.rect.bottom >= self.nave.y + 2 or alien.rect.colliderect(self.nave.rect):
+                self.vidas = 0
                 self.estado = "game_over"
                 break
 
     def atualizar(self, dt, agora):
         if self.estado != "jogando":
             return
+        if self.pontuacao >= 1600 and not self.vida_extra_ganha:
+         self.vidas += 1
+         self.vida_extra_ganha = True
         teclas = pygame.key.get_pressed()
         self.nave.atualizar(dt, teclas)
         if teclas[pygame.K_SPACE]:
@@ -112,8 +183,10 @@ class Jogo:
             self.tiros.append(Tiro(atirador.x + atirador.largura / 2, atirador.y + atirador.altura, 210, False))
             self.som_tiro_alien.play()
             self.ultimo_tiro_inimigo = agora
-            self.intervalo_tiro_inimigo = random.uniform(0.65, 1.35)
-
+            if self.fase == 3:
+                self.intervalo_tiro_inimigo = random.uniform(0.30, 0.65)
+            else:
+                self.intervalo_tiro_inimigo = random.uniform(0.65, 1.3)
         for tiro in self.tiros[:]:
             tiro.atualizar(dt)
             if tiro.y < -20 or tiro.y > ALTURA + 20:
@@ -131,10 +204,20 @@ class Jogo:
                         self.velocidade_alien = min(115, self.velocidade_alien + 1.2)
                         break
             else:
+              
                 if tiro.rect.colliderect(self.nave.rect):
                     self.tiros.remove(tiro)
-                    self.estado = "game_over"
+                    self.vidas -= 1
+
+                    if self.vidas <= 0:
+                        self.estado = "game_over"
+                    else:
+                        # Reposiciona a nave e limpa os tiros.
+                        self.nave = Nave(self.nave_imagem)
+                        self.tiros = []
+
                     continue
+
             if atingiu:
                 continue
             for barreira in self.barreiras:
@@ -157,7 +240,20 @@ class Jogo:
         self.desenhar_fundo()
         self.texto(f"SCORE {self.pontuacao:05d}", self.fonte, BRANCO, (115, 25))
         self.texto("SPACE INVADERS", self.fonte, CIANO, (LARGURA // 2, 25))
-        self.texto("1UP", self.fonte, VERDE, (LARGURA - 85, 25))
+
+        self.texto(
+        f"FASE {self.fase}",
+        self.fonte,
+        AMARELO,
+        (LARGURA // 2, 65)
+    )
+
+        self.texto(
+        f"VIDAS {self.vidas}",
+        self.fonte,
+        VERDE,
+        (LARGURA - 90, 25)
+    )
         for alien in self.aliens:
             alien.desenhar(self.tela)
         for barreira in self.barreiras:
@@ -178,63 +274,62 @@ class Jogo:
         pygame.display.flip()
 
 
-
 def executar():
-    pygame.init()
-    pygame.mixer.init()
+        pygame.init()
+        pygame.mixer.init()
 
-    pygame.display.set_caption(TITULO)
-    tela = pygame.display.set_mode((LARGURA, ALTURA))
-    relogio = pygame.time.Clock()
+        pygame.display.set_caption(TITULO)
+        tela = pygame.display.set_mode((LARGURA, ALTURA))
+        relogio = pygame.time.Clock()
 
-    raiz = Path(__file__).resolve().parents[2]
+        raiz = Path(__file__).resolve().parents[2]
 
-    # Música de fundo
-    musica = raiz / "assets" / "audio" / "Soundtrack.mp3"
-    pygame.mixer.music.load(str(musica))
-    pygame.mixer.music.set_volume(0.35)
-    pygame.mixer.music.play(-1)
+        # Música de fundo
+        musica = raiz / "assets" / "audio" / "Soundtrack.mp3"
+        pygame.mixer.music.load(str(musica))
+        pygame.mixer.music.set_volume(0.35)
+        pygame.mixer.music.play(-1)
 
-    # Sons dos disparos
-    som_tiro_nave = pygame.mixer.Sound(
-        str(raiz / "assets" / "audio" / "tiro-nave.wav")
-    )
+        # Sons dos disparos
+        som_tiro_nave = pygame.mixer.Sound(
+            str(raiz / "assets" / "audio" / "tiro-nave.wav")
+        )
 
-    som_tiro_alien = pygame.mixer.Sound(
-        str(raiz / "assets" / "audio" / "tiro-aliens.wav")
-    )
+        som_tiro_alien = pygame.mixer.Sound(
+            str(raiz / "assets" / "audio" / "tiro-aliens.wav")
+        )
 
-    som_tiro_nave.set_volume(0.45)
-    som_tiro_alien.set_volume(0.35)
+        som_tiro_nave.set_volume(0.45)
+        som_tiro_alien.set_volume(0.35)
 
-    # Cria o jogo
-    jogo = Jogo(tela, raiz)
+        # Cria o jogo
+        jogo = Jogo(tela, raiz)
 
-    # Disponibiliza os sons para a classe Jogo
-    jogo.som_tiro_nave = som_tiro_nave
-    jogo.som_tiro_alien = som_tiro_alien
+        # Disponibiliza os sons para a classe Jogo
+        jogo.som_tiro_nave = som_tiro_nave
+        jogo.som_tiro_alien = som_tiro_alien
 
-    executando = True
+        executando = True
 
-    while executando:
-        dt = min(relogio.tick(FPS) / 1000, 0.04)
-        agora = pygame.time.get_ticks() / 1000
+        while executando:
+            dt = min(relogio.tick(FPS) / 1000, 0.04)
+            agora = pygame.time.get_ticks() / 1000
 
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                executando = False
-
-            elif evento.type == pygame.KEYDOWN:
-                if evento.key == pygame.K_ESCAPE:
+            for evento in pygame.event.get():
+                if evento.type == pygame.QUIT:
                     executando = False
 
-                elif evento.key == pygame.K_RETURN and jogo.estado in (
-                    "game_over", "vitoria"
-                ):
-                    jogo.novo_jogo()
+                elif evento.type == pygame.KEYDOWN:
+                    if evento.key == pygame.K_ESCAPE:
+                        executando = False
 
-        jogo.atualizar(dt, agora)
-        jogo.desenhar()
+                    elif evento.key == pygame.K_RETURN and jogo.estado in (
+                        "game_over", "vitoria"
+                    ):
+                        jogo.novo_jogo()
 
-    pygame.quit()
+            jogo.atualizar(dt, agora)
+            jogo.desenhar()
+
+        pygame.quit()
 
